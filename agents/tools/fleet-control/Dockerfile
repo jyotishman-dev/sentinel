@@ -8,7 +8,7 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 
+ENV CI=true
 RUN pnpm run build
 
 CMD ["node", "dist/index.js"]
-

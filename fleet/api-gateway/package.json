@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "pnpm": {
+  "onlyBuiltDependencies": ["esbuild"]
+},
   "scripts": {
     "dev": "nodemon --exec tsx src/server.ts"
   },

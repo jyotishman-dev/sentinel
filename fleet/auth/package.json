@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+  ,
   "scripts": {
     "dev": "nodemon --exec tsx src/server.ts"
   },
@@ -14,7 +18,8 @@
     "@types/express": "^5.0.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "esbuild": "^0.21.0"
   },
   "devDependencies": {
     "@types/node": "^26.3.0",

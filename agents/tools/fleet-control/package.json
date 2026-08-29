@@ -9,6 +9,11 @@
     "build": "tsc",
     "start": "node dist/index.js"
   },
+"pnpm": {
+  "onlyBuiltDependencies": ["esbuild"]
+},
+
+
   "keywords": [],
   "author": "",
   "license": "ISC",

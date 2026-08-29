@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "nodemon --exec tsx src/index.ts "
   },
+  "pnpm": {
+  "onlyBuiltDependencies": ["esbuild"]
+},
   "keywords": [],
   "author": "",
   "license": "ISC",

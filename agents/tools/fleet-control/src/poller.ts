@@ -10,7 +10,12 @@ export function getLatestSnapshot(serviceName: string): ServiceHealth | undefine
 
 export function getAllSnapshots(): ServiceHealth[] {
   return listServiceNames().map(
-    (name) => latestSnapshot.get(name) ?? { service: name, status: "unreachable" }
+    (name) =>
+      latestSnapshot.get(name) ?? {
+        service: name,
+        status: "unreachable",
+        checked_at: new Date().toISOString(),
+      }
   );
 }
 
@@ -34,7 +39,7 @@ async function pollOnce(): Promise<void> {
 let intervalHandle: ReturnType<typeof setInterval> | undefined;
 
 export function startPolling(intervalMs = 5000): void {
-  if (intervalHandle) return; // idempotent - safe to call more than once
+  if (intervalHandle) return; 
   void pollOnce();
   intervalHandle = setInterval(() => void pollOnce(), intervalMs);
 }

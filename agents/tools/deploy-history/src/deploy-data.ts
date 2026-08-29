@@ -3,7 +3,7 @@ export interface Deploy {
   sha: string;
   author: string;
   message: string;
-  deployed_at: string; // ISO timestamp
+  deployed_at: string; 
 }
 
 const SERVICES = ["api-gateway", "orders", "auth"];
@@ -26,9 +26,7 @@ const MESSAGES: Record<string, string[]> = {
   ],
 };
 
-// Generated once at process start so "recent" deploys stay recent relative to
-// when the server booted, and each restart gives you a fresh-looking history
-// without needing a real database.
+
 function generateHistory(): Deploy[] {
   const now = Date.now();
   const history: Deploy[] = [];

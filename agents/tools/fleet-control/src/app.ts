@@ -1,39 +1,35 @@
 import express from "express";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { createFleetControlServer } from "./mcp-server.js";
+import { startPolling } from "./poller.js";
 
-
-import type {Express}  from "express"
-import { FleetClient } from "./clients/fleet.client.js";
-import { FleetService } from "./services/fleet.service.js";
-import { FleetController } from "./controllers/fleet.controller.js";
-import { createFleetRoutes } from "./routes/fleet.routes.js";
-
-const app : Express = express();
-
+import type { Express } from "express";
+const app: Express  = express();
 app.use(express.json());
 
-const fleetClient = new FleetClient(
-  process.env.FLEET_API_URL ?? "http://localhost:8080",
-  process.env.FLEET_API_KEY,
-);
+startPolling();
 
-const fleetService = new FleetService(
-  fleetClient,
-);
-
-const fleetController = new FleetController(
-  fleetService,
-);
-
-app.get("/health", (_req, res) => {
-  res.json({
-    ok: true,
-    service: "fleet-control-mcp",
+// Stateless MCP endpoint: a fresh server + transport per request. Simple and
+// reliable for a hackathon demo - no session store to keep alive. If you need
+// multi-turn MCP session state later, switch sessionIdGenerator to a real
+// generator and keep a Map<sessionId, transport>.
+app.post("/mcp", async (req, res) => {
+  const server = createFleetControlServer();
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
   });
+
+  res.on("close", () => {
+    void transport.close();
+    void server.close();
+  });
+
+  await server.connect(transport);
+  await transport.handleRequest(req, res, req.body);
 });
 
-app.use(
-  "/api/fleet",
-  createFleetRoutes(fleetController),
-);
+app.get("/health", (_req, res) => {
+  res.json({ ok: true, service: "fleet-control-mcp" });
+});
 
 export default app;

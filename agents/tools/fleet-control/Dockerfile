@@ -1,8 +1,14 @@
-
 FROM node:22-slim
+
 RUN npm install -g pnpm
+RUN pnpm config set --global ignore-scripts false
+
 WORKDIR /app
+
 COPY package.json pnpm-lock.yaml* ./
+
 RUN pnpm install --frozen-lockfile
+
 COPY . .
-CMD ["npx", "tsx", "src/index.ts"]
+
+CMD ["npx", "tsx", "src/server.ts"]

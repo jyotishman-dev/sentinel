@@ -1,11 +1,11 @@
+import { configDotenv } from "dotenv";
 import app from "./app.js";
 
-const PORT = 5001;
+configDotenv();
 
+const PORT = process.env.PORT || 5001;
 
-app.listen(PORT, ()=>{
-    console.log(`app listening on PORT ${PORT}`)
-})
-
-
-
+app.listen(PORT, () => {
+  console.log(`deploy-history MCP server listening on PORT ${PORT}`);
+  console.log(`MCP endpoint: http://localhost:${PORT}/mcp`);
+});

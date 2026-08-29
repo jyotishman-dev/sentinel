@@ -12,10 +12,14 @@
   "packageManager": "pnpm@11.23.0",
   "type": "module",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/express": "^5.0.6",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "node-fetch": "^3.3.2",
     "nodemon": "^3.1.14",
     "tsx": "^4.23.12",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "zod": "^4.4.3"
   }
 }

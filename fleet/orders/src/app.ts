@@ -2,7 +2,7 @@ import express from "express";
 
 const app = express();
 
-const SERVICE_NAME = "api-gateway";
+const SERVICE_NAME = "orders";
 
 interface ServiceState {
   healthy: boolean;

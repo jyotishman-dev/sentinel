@@ -1,0 +1,77 @@
+services:
+  api-gateway:
+    build:
+      context: ./fleet/api-gateway
+    ports:
+      - "4001:4001"
+    environment:
+      - PORT=4001
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4001/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  orders:
+    build:
+      context: ./fleet/orders
+    ports:
+      - "4002:4002"
+    environment:
+      - PORT=4002
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4002/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  auth:
+    build:
+      context: ./fleet/auth
+    ports:
+      - "4003:4003"
+    environment:
+      - PORT=4003
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4003/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  fleet-control:
+    build:
+      context: ./agents/tools/fleet-control
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - API_GATEWAY_URL=http://api-gateway:4001
+      - ORDERS_URL=http://orders:4002
+      - AUTH_URL=http://auth:4003
+    depends_on:
+      - api-gateway
+      - orders
+      - auth
+
+  deploy-history:
+    build:
+      context: ./agents/tools/deploy-history
+    ports:
+      - "5001:5001"
+    environment:
+      - PORT=5001
+
+  # Run manually when you want to break something, not on every `up`:
+  #   docker compose run --rm chaos-engine node chaos.js latency
+  chaos-engine:
+    build:
+      context: ./chaos-engine
+    profiles: ["manual"]
+    environment:
+      - API_GATEWAY_URL=http://api-gateway:4001
+      - ORDERS_URL=http://orders:4002
+      - AUTH_URL=http://auth:4003
+    depends_on:
+      - api-gateway
+      - orders
+      - auth

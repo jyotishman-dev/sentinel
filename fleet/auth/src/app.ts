@@ -1,8 +1,8 @@
 import express from "express";
+import type {Express} from "express"
+const app: Express = express();
 
-const app = express();
-
-const SERVICE_NAME = "api-gateway";
+const SERVICE_NAME = "auth";
 
 interface ServiceState {
   healthy: boolean;

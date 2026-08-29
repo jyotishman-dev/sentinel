@@ -2,11 +2,10 @@ import fetch from "node-fetch";
 
 export interface ServiceHealth {
   service: string;
-  status: "healthy" | "down" | "unreachable";
+  status: "healthy" | "degraded" | "down" | "unreachable";
   latency_ms?: number;
 }
 
-// Override with env vars when the fleet is deployed somewhere other than localhost.
 const SERVICES: Record<string, string> = {
   "api-gateway": process.env.API_GATEWAY_URL ?? "http://localhost:4001",
   orders: process.env.ORDERS_URL ?? "http://localhost:4002",
@@ -34,14 +33,16 @@ export async function getServiceHealth(serviceName: string): Promise<ServiceHeal
       return { service: serviceName, status: "down", latency_ms: roundTrip };
     }
 
-    const data = (await res.json()) as { latency_ms?: number };
+    const data = (await res.json()) as { latency_ms?: number; status?: string };
+    const effectiveLatency = data.latency_ms ?? roundTrip;
+    const isDegraded = effectiveLatency >= 1000 || data.status === "degraded";
+
     return {
       service: serviceName,
-      status: "healthy",
-      latency_ms: data.latency_ms ?? roundTrip,
+      status: isDegraded ? "degraded" : "healthy",
+      latency_ms: effectiveLatency,
     };
   } catch {
-    // Container is gone / not reachable at all - distinct from a graceful 503.
     return { service: serviceName, status: "unreachable" };
   }
 }
@@ -53,8 +54,7 @@ export async function restartService(serviceName: string): Promise<{ ok: boolean
       `Unknown service "${serviceName}". Known services: ${listServiceNames().join(", ")}`
     );
   }
-  // Day-3 fleet exposes /chaos/reset as the "bring it back to healthy" action.
-  // Swap this for a real container-restart call (Docker API / compose) once you wire that up.
+  
   const res = await fetch(`${base}/chaos/reset`, { method: "POST" });
   return (await res.json()) as { ok: boolean };
 }

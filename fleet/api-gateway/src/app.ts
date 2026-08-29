@@ -23,9 +23,10 @@ app.get("/health", (_req, res) => {
       });
     }
 
+    const isDegraded = state.latency_ms >= 1000;
     return res.json({
       service: SERVICE_NAME,
-      status: "healthy",
+      status: isDegraded ? "degraded" : "healthy",
       latency_ms: state.latency_ms,
     });
   }, state.latency_ms);

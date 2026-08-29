@@ -1,945 +1,641 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Activity,
-  AlertTriangle,
-  Bot,
+  AlertCircle,
   Box,
-  CheckCircle2,
-  ChevronDown,
-  Clock3,
-  Code2,
-  Cpu,
+  Check,
+  ChevronRight,
+  Clock,
+  Code,
+  ExternalLink,
   GitCommit,
-  HardDrive,
+  Layers,
   LayoutDashboard,
   ListFilter,
+  Loader2,
   Network,
-  Play,
+  Radio,
   RefreshCw,
   Search,
   Server,
   Settings,
   ShieldCheck,
+  Sliders,
   Terminal,
-  Zap,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 
-type Service = {
-  name: string;
-  status: "healthy" | "degraded" | "down";
-  latency: string;
-  requests: string;
-  errors: string;
-  cpu: number;
-  memory: number;
-};
+import { AgentPanel } from "@/components/agent-panel";
+import { SettingsDialog } from "@/components/settings-dialog";
+import { SearchDialog } from "@/components/search-dialog";
 
-const services: Service[] = [
-  {
-    name: "api-gateway",
-    status: "healthy",
-    latency: "38ms",
-    requests: "1.2k/s",
-    errors: "0.1%",
-    cpu: 31,
-    memory: 42,
-  },
-  {
-    name: "orders",
-    status: "degraded",
-    latency: "421ms",
-    requests: "842/s",
-    errors: "17.2%",
-    cpu: 78,
-    memory: 61,
-  },
-  {
-    name: "auth",
-    status: "healthy",
-    latency: "21ms",
-    requests: "1.8k/s",
-    errors: "0.0%",
-    cpu: 24,
-    memory: 38,
-  },
+import { OverviewView } from "@/components/views/overview-view";
+import { IncidentsView } from "@/components/views/incidents-view";
+import { ServicesView } from "@/components/views/services-view";
+import { TopologyView } from "@/components/views/topology-view";
+import { DeploymentsView } from "@/components/views/deployments-view";
+import { ChaosView } from "@/components/views/chaos-view";
+import { SandboxView } from "@/components/views/sandbox-view";
+import { AuditLogView } from "@/components/views/audit-log-view";
+
+import {
+  AGENT_URL,
+  fetchFleetStatus,
+  triggerChaos,
+  resetChaos,
+  type FleetStatus,
+  type ChaosMode,
+} from "@/lib/api";
+
+const navItems = [
+  { name: "Overview", icon: LayoutDashboard, section: "Monitoring" },
+  { name: "Incidents", icon: AlertCircle, section: "Monitoring" },
+  { name: "Services", icon: Server, section: "Monitoring" },
+  { name: "Topology", icon: Network, section: "Monitoring" },
+  { name: "Deployments", icon: GitCommit, section: "Operations" },
+  { name: "Chaos Lab", icon: Sliders, section: "Operations" },
+  { name: "Sandbox", icon: Box, section: "Operations" },
+  { name: "Audit Log", icon: ListFilter, section: "Operations" },
 ];
 
-const events = [
-  {
-    time: "10:41:23",
-    type: "success",
-    text: "orders recovery confirmed",
-  },
-  {
-    time: "10:41:19",
-    type: "deploy",
-    text: "configuration patch applied",
-  },
-  {
-    time: "10:41:14",
-    type: "approval",
-    text: "human approval received",
-  },
-  {
-    time: "10:41:12",
-    type: "patch",
-    text: "patch #17 passed sandbox validation",
-  },
-  {
-    time: "10:41:08",
-    type: "diagnosis",
-    text: "root cause identified by diagnoser",
-  },
-  {
-    time: "10:41:05",
-    type: "analysis",
-    text: "diagnoser started log correlation",
-  },
-  {
-    time: "10:41:03",
-    type: "incident",
-    text: "incident INC-042 created",
-  },
-];
-
-function StatusDot({ status }: { status: Service["status"] }) {
-  if (status === "healthy") {
-    return (
-      <span className="relative flex h-2 w-2">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40" />
-        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-      </span>
-    );
-  }
-
-  if (status === "degraded") {
-    return <span className="h-2 w-2 rounded-full bg-amber-400" />;
-  }
-
-  return <span className="h-2 w-2 rounded-full bg-red-500" />;
-}
-
-function Metric({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      <div className="text-zinc-500">{icon}</div>
-      <div>
-        <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-          {label}
-        </div>
-        <div className="font-mono text-sm text-zinc-200">{value}</div>
-      </div>
-    </div>
-  );
-}
-
-function EventIcon({ type }: { type: string }) {
-  switch (type) {
-    case "success":
-      return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />;
-    case "incident":
-      return <AlertTriangle className="h-3.5 w-3.5 text-red-400" />;
-    case "approval":
-      return <ShieldCheck className="h-3.5 w-3.5 text-blue-400" />;
-    case "patch":
-      return <Code2 className="h-3.5 w-3.5 text-purple-400" />;
-    case "diagnosis":
-      return <Bot className="h-3.5 w-3.5 text-cyan-400" />;
-    default:
-      return <Activity className="h-3.5 w-3.5 text-zinc-400" />;
-  }
-}
+const POLL_INTERVAL = 4000;
 
 export default function Home() {
   const [activeNav, setActiveNav] = useState("Overview");
   const [chaosOpen, setChaosOpen] = useState(false);
-  const [approved, setApproved] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [agentOpen, setAgentOpen] = useState(false);
+
+  const [data, setData] = useState<FleetStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  // Chaos modal state
+  const [chaosTarget, setChaosTarget] = useState<string>("");
+  const [chaosMode, setChaosMode] = useState<ChaosMode>("kill");
+  const [chaosInjecting, setChaosInjecting] = useState(false);
+  const [chaosError, setChaosError] = useState<string | null>(null);
+
+  // Remediation approval state
+  const [remediatingService, setRemediatingService] = useState<string | null>(null);
+
+  const AGENT_PANEL_WIDTH_VW = 42;
+  const contentInsetStyle = {
+    right: agentOpen ? `${AGENT_PANEL_WIDTH_VW}vw` : 0,
+    transition: "right 300ms ease-in-out",
+  };
+
+  const abortRef = useRef<AbortController | null>(null);
+
+  const doFetch = useCallback(async (isRefresh = false) => {
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+    if (isRefresh) setRefreshing(true);
+    try {
+      const status = await fetchFleetStatus(ac.signal);
+      setData(status);
+      setError(null);
+      setLastUpdated(new Date());
+      if (!chaosTarget && status.services.length > 0) {
+        setChaosTarget(status.services[0].service);
+      }
+    } catch (err) {
+      if (ac.signal.aborted) return;
+      setError(err instanceof Error ? err.message : "Failed to fetch telemetry");
+    } finally {
+      if (!ac.signal.aborted) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+  }, [chaosTarget]);
+
+  useEffect(() => {
+    doFetch();
+    const id = setInterval(() => doFetch(), POLL_INTERVAL);
+    return () => {
+      clearInterval(id);
+      abortRef.current?.abort();
+    };
+  }, [doFetch]);
+
+  // Global key listener for '/' search shortcut
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "/" && !["INPUT", "TEXTAREA"].includes((e.target as HTMLElement).tagName)) {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const handleInjectChaos = async () => {
+    if (!chaosTarget) return;
+    setChaosInjecting(true);
+    setChaosError(null);
+    const result = await triggerChaos(chaosTarget, chaosMode);
+    setChaosInjecting(false);
+    if (result.ok) {
+      setChaosOpen(false);
+      doFetch(true);
+    } else {
+      setChaosError(result.error || "Injection failed");
+    }
+  };
+
+  const handleDispatchAgent = async (serviceName: string, details?: string) => {
+    setRemediatingService(serviceName);
+    setAgentOpen(true);
+    try {
+      await dispatchIncidentToTrueForgeAgent(
+        serviceName,
+        details || `Service is reporting abnormal telemetry / downtime.`
+      );
+    } finally {
+      setTimeout(() => {
+        setRemediatingService(null);
+      }, 800);
+    }
+  };
+
+  const handleApproveRemediation = async (serviceName: string) => {
+    setRemediatingService(serviceName);
+    
+    // Optimistic instant state transition
+    setData((prev) => {
+      if (!prev) return prev;
+      const updated = prev.services.map((s) =>
+        s.service === serviceName ? { ...s, status: "healthy" as const, latency_ms: 1 } : s
+      );
+      return {
+        ...prev,
+        services: updated,
+        summary: {
+          ...prev.summary,
+          healthyCount: updated.length,
+          activeIncidents: 0,
+        },
+      };
+    });
+
+    try {
+      await resetChaos(serviceName);
+    } finally {
+      setTimeout(() => {
+        doFetch(true);
+        setRemediatingService(null);
+      }, 500);
+    }
+  };
+
+  const groupedNav = navItems.reduce<Record<string, typeof navItems>>(
+    (acc, item) => {
+      (acc[item.section] ||= []).push(item);
+      return acc;
+    },
+    {}
+  );
+
+  const services = data?.services ?? [];
+  const incidentServices = services.filter(
+    (s) => s.status !== "healthy" || (s.latency_ms != null && s.latency_ms >= 1000)
+  );
+  const incidentCount = incidentServices.length;
+  const navBadge = incidentCount > 0 ? incidentCount : undefined;
 
   return (
-    <main className="min-h-screen bg-[#08090b] text-zinc-200">
-      {/* TOP BAR */}
-      <header className="fixed left-0 right-0 top-0 z-50 h-14 border-b border-zinc-800/80 bg-[#0b0c0f]/95 backdrop-blur">
-        <div className="flex h-full items-center">
-          <div className="flex h-full w-[220px] items-center border-r border-zinc-800/80 px-5">
-            <div className="mr-3 flex h-7 w-7 items-center justify-center rounded-md bg-zinc-100 text-black">
-              <ShieldCheck className="h-4 w-4" />
+    <main className="relative min-h-screen bg-[#090a0b] text-[#ededed] font-sans antialiased selection:bg-primary/20">
+      {/* TOP NAV BAR */}
+      <header
+        className="fixed left-0 top-0 z-50 h-13 border-b border-border/50 bg-[#0c0d0e]/90 backdrop-blur-md"
+        style={contentInsetStyle}
+      >
+        <div className="flex h-full items-center justify-between">
+          <div className="flex h-full items-center">
+            {/* Brand Logo */}
+            <div className="flex h-full w-[220px] items-center border-r border-border/50 px-4 gap-2.5">
+              <div className="flex h-7 w-7 items-center justify-center rounded-md border border-border/80 bg-[#16181b] text-foreground shadow-sm">
+                <ShieldCheck className="h-4 w-4 text-emerald-400" />
+              </div>
+              <div>
+                <div className="text-xs font-semibold tracking-tight text-foreground">
+                  sentinel
+                </div>
+                <div className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground/70">
+                  control plane
+                </div>
+              </div>
             </div>
 
-            <div>
-              <div className="text-sm font-semibold tracking-tight">
-                sentinel
+            {/* Cluster Status & Telemetry Metadata */}
+            <div className="hidden md:flex items-center gap-4 px-4 text-xs">
+              <div className="flex items-center gap-2">
+                {error ? (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+                    <span className="text-red-400 font-mono text-[11px]">unreachable</span>
+                  </>
+                ) : incidentCount > 0 ? (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                    <span className="text-amber-400 font-mono text-[11px]">
+                      {incidentCount} active incident{incidentCount > 1 ? "s" : ""}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    <span className="text-muted-foreground font-mono text-[11px]">all systems nominal</span>
+                  </>
+                )}
               </div>
-              <div className="font-mono text-[9px] text-zinc-500">
-                CONTROL PLANE
+              <Separator orientation="vertical" className="h-3.5 bg-border/60" />
+              <div className="font-mono text-[11px] text-muted-foreground/80 flex items-center gap-2">
+                <span>mesh: local-docker</span>
+                <span className="text-border">·</span>
+                <span>agent: trueforge:8790</span>
               </div>
             </div>
           </div>
 
-          <div className="flex flex-1 items-center justify-between px-5">
-            <div className="flex items-center gap-5">
-              <div className="flex items-center gap-2 text-xs">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                <span className="text-zinc-400">All systems operational</span>
-              </div>
+          {/* Right Actions */}
+          <div className="flex items-center gap-2.5 px-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground font-mono"
+              onClick={() => setSearchOpen(true)}
+            >
+              <Search className="h-3 w-3" />
+              <span className="hidden sm:inline">Search</span>
+              <kbd className="rounded border border-border/80 bg-muted/60 px-1 py-0.2 font-mono text-[9px]">
+                /
+              </kbd>
+            </Button>
 
-              <Separator orientation="vertical" className="h-4 bg-zinc-800" />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1.5 border-border/70 bg-[#121417] text-xs font-mono hover:bg-muted"
+              onClick={() => doFetch(true)}
+              disabled={refreshing}
+            >
+              <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">Sync</span>
+            </Button>
 
-              <div className="font-mono text-xs text-zinc-500">
-                production / us-east-1
-              </div>
-            </div>
+            <Button
+              size="sm"
+              className="h-7 gap-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 text-xs font-mono"
+              onClick={() => setAgentOpen(true)}
+            >
+              <Terminal className="h-3 w-3" />
+              Agent Harness
+            </Button>
 
-            <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 gap-2 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-white"
-              >
-                <Search className="h-3.5 w-3.5" />
-                Search
-                <kbd className="ml-2 rounded border border-zinc-700 px-1.5 py-0.5 font-mono text-[9px]">
-                  /
-                </kbd>
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 gap-2 border-zinc-700 bg-transparent text-xs hover:bg-zinc-800"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                Refresh
-              </Button>
-
-              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-700 bg-zinc-800 text-xs">
-                A
-              </div>
-            </div>
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-border/70 bg-[#121417] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title="Settings"
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
       </header>
 
-      <div className="flex pt-14">
+      <div className="flex pt-13">
         {/* SIDEBAR */}
-        <aside className="fixed bottom-0 left-0 top-14 w-[220px] border-r border-zinc-800/80 bg-[#0b0c0f]">
-          <div className="p-3">
-            <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
-              Monitor
-            </div>
-
-            <nav className="space-y-0.5">
-              {[
-                ["Overview", LayoutDashboard],
-                ["Incidents", AlertTriangle],
-                ["Services", Server],
-                ["Topology", Network],
-              ].map(([name, Icon]: any) => (
-                <button
-                  key={name}
-                  onClick={() => setActiveNav(name)}
-                  className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-xs transition ${
-                    activeNav === name
-                      ? "bg-zinc-800 text-white"
-                      : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300"
-                  }`}
-                >
-                  <span className="flex items-center gap-3">
-                    <Icon className="h-4 w-4" />
-                    {name}
-                  </span>
-
-                  {name === "Incidents" && (
-                    <Badge className="h-5 bg-red-500/10 px-1.5 text-[9px] text-red-400 hover:bg-red-500/10">
-                      1
-                    </Badge>
-                  )}
-                </button>
-              ))}
-            </nav>
-
-            <div className="mb-2 mt-7 px-2 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
-              Operations
-            </div>
-
-            <nav className="space-y-0.5">
-              {[
-                ["Deployments", GitCommit],
-                ["Chaos Lab", Zap],
-                ["Sandbox", Box],
-                ["Audit Log", ListFilter],
-              ].map(([name, Icon]: any) => (
-                <button
-                  key={name}
-                  onClick={() => {
-                    setActiveNav(name);
-                    if (name === "Chaos Lab") setChaosOpen(true);
-                  }}
-                  className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-xs text-zinc-500 transition hover:bg-zinc-900 hover:text-zinc-300"
-                >
-                  <Icon className="h-4 w-4" />
-                  {name}
-                </button>
-              ))}
-            </nav>
-
-            <div className="mb-2 mt-7 px-2 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
-              Agent Runtime
-            </div>
-
-            <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900/30 p-3">
-              {[
-                ["Watcher", "Monitoring"],
-                ["Diagnoser", "Idle"],
-                ["Patcher", "Idle"],
-              ].map(([agent, status]) => (
-                <div
-                  key={agent}
-                  className="flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    <span className="text-xs text-zinc-400">{agent}</span>
+        <aside className="fixed bottom-0 left-0 top-13 z-40 w-[220px] border-r border-border/50 bg-[#0c0d0e]/60 backdrop-blur-md">
+          <div className="flex h-full flex-col p-3 justify-between">
+            <div className="space-y-5">
+              {Object.entries(groupedNav).map(([section, items]) => (
+                <div key={section} className="space-y-1">
+                  <div className="px-2.5 text-[9px] font-mono font-semibold uppercase tracking-wider text-muted-foreground/60">
+                    {section}
                   </div>
-                  <span className="font-mono text-[9px] text-zinc-600">
-                    {status}
-                  </span>
+                  <nav className="space-y-0.5">
+                    {items.map((item) => {
+                      const Icon = item.icon;
+                      const active = activeNav === item.name;
+                      const showBadge = item.name === "Incidents" && navBadge;
+                      return (
+                        <button
+                          key={item.name}
+                          onClick={() => setActiveNav(item.name)}
+                          className={`group flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-xs font-mono transition-colors ${
+                            active
+                              ? "bg-[#181a1e] text-foreground font-medium border border-border/60"
+                              : "text-muted-foreground hover:bg-muted/40 hover:text-foreground border border-transparent"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2.5">
+                            <Icon
+                              className={`h-3.5 w-3.5 ${
+                                active ? "text-emerald-400" : "text-muted-foreground group-hover:text-foreground"
+                              }`}
+                            />
+                            {item.name}
+                          </span>
+                          {showBadge ? (
+                            <span className="rounded bg-amber-500/20 text-amber-300 px-1.5 py-0.2 text-[9px] font-mono font-medium">
+                              {navBadge}
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </nav>
                 </div>
               ))}
-            </div>
-          </div>
 
-          <div className="absolute bottom-0 left-0 right-0 border-t border-zinc-800/80 p-3">
-            <button className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-xs text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
-              <Settings className="h-4 w-4" />
-              Settings
-            </button>
+              {/* Agent Runtime Sidebar Pill */}
+              <div className="space-y-1 pt-1">
+                <div className="px-2.5 text-[9px] font-mono font-semibold uppercase tracking-wider text-muted-foreground/60">
+                  Agent Harness Runtime
+                </div>
+                <div className="rounded-lg border border-border/50 bg-[#121417]/80 p-2.5 space-y-2 text-[11px] font-mono">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Watcher:</span>
+                    <span className={incidentCount > 0 ? "text-amber-400" : "text-emerald-400"}>
+                      {incidentCount > 0 ? "Triage Active" : "Nominal"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Diagnoser:</span>
+                    <span className="text-muted-foreground/80">
+                      {incidentCount > 0 ? "Correlating" : "Standby"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Patcher:</span>
+                    <span className="text-muted-foreground/80">
+                      {incidentCount > 0 ? "License Hold" : "Standby"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Session Open */}
+            <div className="pt-2 border-t border-border/50">
+              <button
+                onClick={() => setAgentOpen(true)}
+                className="flex w-full items-center justify-between rounded-md border border-border/50 bg-[#121417] px-2.5 py-1.5 text-xs font-mono text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <Radio className="h-3 w-3 text-emerald-400 animate-pulse" />
+                  Live Session
+                </span>
+                <ExternalLink className="h-3 w-3" />
+              </button>
+            </div>
           </div>
         </aside>
 
-        {/* MAIN */}
-        <section className="ml-[220px] w-[calc(100%-220px)]">
-          <div className="mx-auto max-w-[1500px] p-6">
-            {/* PAGE HEADER */}
-            <div className="mb-6 flex items-end justify-between">
+        {/* MAIN VIEW CONTENT AREA */}
+        <section
+          className="ml-[220px] transition-[width] duration-300 ease-in-out"
+          style={{
+            width: agentOpen
+              ? `calc(100% - 220px - ${AGENT_PANEL_WIDTH_VW}vw)`
+              : "calc(100% - 220px)",
+          }}
+        >
+          <div className="mx-auto max-w-[1500px] p-6 space-y-6">
+            {/* VIEW HEADER */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-4">
               <div>
-                <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-widest text-zinc-600">
-                  <span>Production</span>
-                  <ChevronDown className="h-3 w-3" />
+                <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-muted-foreground/70 mb-1">
+                  <span>Control Plane</span>
+                  <span>/</span>
+                  <span className="text-foreground">{activeNav}</span>
                 </div>
-
-                <h1 className="text-xl font-semibold tracking-tight">
-                  Fleet overview
+                <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                  {activeNav === "Overview" && "System Health & Cluster Telemetry"}
+                  {activeNav === "Incidents" && "Incident Command & Remediation Ledger"}
+                  {activeNav === "Services" && "Fleet Service Mesh Inspection"}
+                  {activeNav === "Topology" && "Traffic Flow & Topology Map"}
+                  {activeNav === "Deployments" && "Deployment History & Rollbacks"}
+                  {activeNav === "Chaos Lab" && "Fault Injection & Chaos Engineering"}
+                  {activeNav === "Sandbox" && "Agent Isolated Execution Sandbox"}
+                  {activeNav === "Audit Log" && "System & Agent Audit Trail"}
                 </h1>
-
-                <p className="mt-1 text-xs text-zinc-500">
-                  Live infrastructure health and autonomous operations.
-                </p>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2 font-mono text-xs">
+                <div className="rounded-md border border-border/60 bg-[#121417] px-2.5 py-1 text-muted-foreground text-[11px] flex items-center gap-1.5">
+                  <Clock className="h-3 w-3 text-muted-foreground/70" />
+                  <span>{lastUpdated ? lastUpdated.toLocaleTimeString([], { hour12: false }) : "Polling..."}</span>
+                </div>
                 <Button
+                  size="sm"
                   variant="outline"
-                  size="sm"
-                  className="h-8 border-zinc-700 bg-transparent text-xs"
-                >
-                  <Clock3 className="mr-2 h-3.5 w-3.5" />
-                  Last 15 minutes
-                </Button>
-
-                <Button
-                  size="sm"
-                  className="h-8 bg-zinc-100 text-xs text-black hover:bg-white"
+                  className="h-7 text-xs font-mono border-border/70 bg-[#121417] hover:bg-muted"
                   onClick={() => setChaosOpen(true)}
                 >
-                  <Zap className="mr-2 h-3.5 w-3.5" />
-                  Chaos Lab
+                  <Sliders className="h-3 w-3 mr-1" />
+                  Fault Injection
                 </Button>
               </div>
             </div>
 
-            {/* SUMMARY */}
-            <div className="mb-5 grid grid-cols-4 gap-3">
-              {[
-                ["Services", "3 / 3", "Operational"],
-                ["Active incidents", "1", "Needs attention"],
-                ["Requests", "3.8k/s", "Across fleet"],
-                ["Uptime", "99.97%", "Last 30 days"],
-              ].map(([label, value, sub], i) => (
-                <Card
-                  key={label}
-                  className="rounded-lg border-zinc-800 bg-[#0d0f12] p-4 shadow-none"
-                >
-                  <div className="text-[10px] uppercase tracking-widest text-zinc-600">
-                    {label}
-                  </div>
+            {/* DYNAMIC VIEW ROUTING */}
+            {activeNav === "Overview" && (
+              <OverviewView
+                data={data}
+                loading={loading}
+                onOpenChaos={() => setChaosOpen(true)}
+                onOpenAgent={() => setAgentOpen(true)}
+                onNavigate={(v) => setActiveNav(v)}
+                onApproveRemediation={handleApproveRemediation}
+                onDispatchAgent={handleDispatchAgent}
+                remediatingService={remediatingService}
+              />
+            )}
 
-                  <div className="mt-2 text-2xl font-semibold tracking-tight">
-                    {value}
-                  </div>
+            {activeNav === "Incidents" && (
+              <IncidentsView
+                data={data}
+                onApproveRemediation={handleApproveRemediation}
+                onDispatchAgent={handleDispatchAgent}
+                remediatingService={remediatingService}
+                onOpenChaos={() => setChaosOpen(true)}
+                onOpenAgent={() => setAgentOpen(true)}
+              />
+            )}
 
-                  <div
-                    className={`mt-1 text-[10px] ${
-                      i === 1 ? "text-amber-500" : "text-zinc-600"
-                    }`}
-                  >
-                    {sub}
-                  </div>
-                </Card>
-              ))}
-            </div>
+            {activeNav === "Services" && (
+              <ServicesView data={data} onRefresh={() => doFetch(true)} />
+            )}
 
-            {/* SERVICES */}
-            <div className="mb-5">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-xs font-semibold text-zinc-300">
-                  Services
-                </h2>
+            {activeNav === "Topology" && (
+              <TopologyView data={data} onOpenChaos={() => setChaosOpen(true)} />
+            )}
 
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-[10px] text-zinc-500 hover:bg-zinc-900"
-                >
-                  View all
-                </Button>
-              </div>
+            {activeNav === "Deployments" && (
+              <DeploymentsView onRefresh={() => doFetch(true)} />
+            )}
 
-              <div className="grid grid-cols-3 gap-3">
-                {services.map((service) => (
-                  <Card
-                    key={service.name}
-                    className={`rounded-lg border-zinc-800 bg-[#0d0f12] p-4 shadow-none ${
-                      service.status === "degraded"
-                        ? "border-amber-500/30"
-                        : ""
-                    }`}
-                  >
-                    <div className="mb-5 flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <StatusDot status={service.status} />
+            {activeNav === "Chaos Lab" && (
+              <ChaosView data={data} onRefresh={() => doFetch(true)} />
+            )}
 
-                        <span className="font-mono text-sm">
-                          {service.name}
-                        </span>
-                      </div>
+            {activeNav === "Sandbox" && <SandboxView />}
 
-                      <Badge
-                        variant="outline"
-                        className={`border-zinc-700 text-[9px] uppercase ${
-                          service.status === "degraded"
-                            ? "border-amber-500/30 text-amber-400"
-                            : "text-emerald-500"
-                        }`}
-                      >
-                        {service.status}
-                      </Badge>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-3">
-                      <Metric
-                        icon={<Activity className="h-3.5 w-3.5" />}
-                        label="Latency"
-                        value={service.latency}
-                      />
-
-                      <Metric
-                        icon={<Zap className="h-3.5 w-3.5" />}
-                        label="Requests"
-                        value={service.requests}
-                      />
-
-                      <Metric
-                        icon={<AlertTriangle className="h-3.5 w-3.5" />}
-                        label="Errors"
-                        value={service.errors}
-                      />
-                    </div>
-
-                    <Separator className="my-4 bg-zinc-800" />
-
-                    <div className="space-y-3">
-                      <div>
-                        <div className="mb-1.5 flex justify-between text-[10px]">
-                          <span className="text-zinc-600">CPU</span>
-                          <span className="font-mono text-zinc-500">
-                            {service.cpu}%
-                          </span>
-                        </div>
-
-                        <Progress
-                          value={service.cpu}
-                          className="h-1 bg-zinc-800"
-                        />
-                      </div>
-
-                      <div>
-                        <div className="mb-1.5 flex justify-between text-[10px]">
-                          <span className="text-zinc-600">Memory</span>
-                          <span className="font-mono text-zinc-500">
-                            {service.memory}%
-                          </span>
-                        </div>
-
-                        <Progress
-                          value={service.memory}
-                          className="h-1 bg-zinc-800"
-                        />
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            </div>
-
-            {/* LOWER GRID */}
-            <div className="grid grid-cols-[1.4fr_0.9fr] gap-3">
-              {/* INCIDENT */}
-              <Card className="rounded-lg border-zinc-800 bg-[#0d0f12] shadow-none">
-                <div className="flex items-center justify-between border-b border-zinc-800 p-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-amber-400" />
-                      <span className="text-sm font-medium">
-                        Active incident
-                      </span>
-                    </div>
-
-                    <div className="mt-1 font-mono text-[10px] text-zinc-600">
-                      INC-042 · orders
-                    </div>
-                  </div>
-
-                  <Badge className="bg-amber-500/10 text-[9px] text-amber-400 hover:bg-amber-500/10">
-                    INVESTIGATING
-                  </Badge>
-                </div>
-
-                <div className="p-4">
-                  <div className="mb-5">
-                    <div className="text-base font-medium">
-                      Orders service latency degradation
-                    </div>
-
-                    <div className="mt-1 text-xs text-zinc-500">
-                      Elevated latency detected across the orders API.
-                    </div>
-                  </div>
-
-                  <div className="mb-6 grid grid-cols-3 gap-3">
-                    <div className="rounded-md border border-zinc-800 bg-zinc-900/30 p-3">
-                      <div className="text-[9px] uppercase tracking-wider text-zinc-600">
-                        Latency
-                      </div>
-                      <div className="mt-1 font-mono text-lg text-amber-400">
-                        421ms
-                      </div>
-                      <div className="text-[9px] text-zinc-600">
-                        +380ms baseline
-                      </div>
-                    </div>
-
-                    <div className="rounded-md border border-zinc-800 bg-zinc-900/30 p-3">
-                      <div className="text-[9px] uppercase tracking-wider text-zinc-600">
-                        Error rate
-                      </div>
-                      <div className="mt-1 font-mono text-lg text-red-400">
-                        17.2%
-                      </div>
-                      <div className="text-[9px] text-zinc-600">
-                        +16.9% baseline
-                      </div>
-                    </div>
-
-                    <div className="rounded-md border border-zinc-800 bg-zinc-900/30 p-3">
-                      <div className="text-[9px] uppercase tracking-wider text-zinc-600">
-                        Duration
-                      </div>
-                      <div className="mt-1 font-mono text-lg">
-                        02m 18s
-                      </div>
-                      <div className="text-[9px] text-zinc-600">
-                        since detection
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* INCIDENT PIPELINE */}
-                  <div className="mb-6">
-                    <div className="mb-3 text-[10px] uppercase tracking-widest text-zinc-600">
-                      Resolution pipeline
-                    </div>
-
-                    <div className="flex items-center">
-                      {[
-                        ["Detected", true],
-                        ["Diagnosed", true],
-                        ["Validated", true],
-                        ["Approval", !approved],
-                        ["Recovery", approved],
-                      ].map(([label, done], i) => (
-                        <div
-                          key={label as string}
-                          className="flex flex-1 items-center"
-                        >
-                          <div className="flex flex-col items-center">
-                            <div
-                              className={`flex h-7 w-7 items-center justify-center rounded-full border ${
-                                done
-                                  ? "border-emerald-500/40 bg-emerald-500/10"
-                                  : "border-zinc-700 bg-zinc-900"
-                              }`}
-                            >
-                              {done ? (
-                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                              ) : (
-                                <span className="h-1.5 w-1.5 rounded-full bg-zinc-600" />
-                              )}
-                            </div>
-
-                            <span className="mt-2 text-[9px] text-zinc-500">
-                              {label as string}
-                            </span>
-                          </div>
-
-                          {i < 4 && (
-                            <div className="mx-2 h-px flex-1 bg-zinc-800" />
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* ROOT CAUSE */}
-                  <div className="rounded-md border border-zinc-800 bg-[#0a0c0f] p-4">
-                    <div className="mb-3 flex items-center gap-2">
-                      <Bot className="h-4 w-4 text-cyan-400" />
-
-                      <span className="text-xs font-medium">
-                        Diagnoser finding
-                      </span>
-
-                      <Badge
-                        variant="outline"
-                        className="ml-auto border-cyan-500/20 text-[9px] text-cyan-400"
-                      >
-                        91% CONFIDENCE
-                      </Badge>
-                    </div>
-
-                    <p className="text-xs leading-5 text-zinc-400">
-                      Configuration mismatch introduced during deployment{" "}
-                      <span className="font-mono text-zinc-300">#184</span>.
-                      Sandbox reproduction confirmed the failure.
-                    </p>
-
-                    <div className="mt-4 flex items-center gap-3">
-                      <div className="flex items-center gap-1.5 text-[9px] text-emerald-500">
-                        <CheckCircle2 className="h-3 w-3" />
-                        logs correlated
-                      </div>
-
-                      <div className="flex items-center gap-1.5 text-[9px] text-emerald-500">
-                        <CheckCircle2 className="h-3 w-3" />
-                        deploy matched
-                      </div>
-
-                      <div className="flex items-center gap-1.5 text-[9px] text-emerald-500">
-                        <CheckCircle2 className="h-3 w-3" />
-                        sandbox verified
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* APPROVAL */}
-                  {!approved ? (
-                    <div className="mt-4 flex items-center justify-between rounded-md border border-blue-500/20 bg-blue-500/[0.04] p-4">
-                      <div>
-                        <div className="flex items-center gap-2 text-xs font-medium">
-                          <ShieldCheck className="h-4 w-4 text-blue-400" />
-                          Action requires approval
-                        </div>
-
-                        <div className="mt-1 text-[10px] text-zinc-600">
-                          Patch #17 · low blast radius · sandbox tests passed
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 border-zinc-700 bg-transparent text-xs"
-                        >
-                          Reject
-                        </Button>
-
-                        <Button
-                          size="sm"
-                          className="h-8 bg-blue-600 text-xs hover:bg-blue-500"
-                          onClick={() => setApproved(true)}
-                        >
-                          Approve fix
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-4 flex items-center gap-3 rounded-md border border-emerald-500/20 bg-emerald-500/[0.04] p-4">
-                      <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-
-                      <div>
-                        <div className="text-xs font-medium text-emerald-400">
-                          Fix approved and deployed
-                        </div>
-
-                        <div className="mt-1 text-[10px] text-zinc-600">
-                          Watcher is monitoring recovery.
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </Card>
-
-              {/* ACTIVITY */}
-              <Card className="rounded-lg border-zinc-800 bg-[#0d0f12] shadow-none">
-                <div className="flex items-center justify-between border-b border-zinc-800 p-4">
-                  <div>
-                    <div className="text-sm font-medium">System activity</div>
-                    <div className="mt-1 text-[10px] text-zinc-600">
-                      Live event stream
-                    </div>
-                  </div>
-
-                  <Activity className="h-4 w-4 text-zinc-600" />
-                </div>
-
-                <div className="divide-y divide-zinc-800/60">
-                  {events.map((event) => (
-                    <div
-                      key={`${event.time}-${event.text}`}
-                      className="flex gap-3 px-4 py-3"
-                    >
-                      <div className="mt-0.5">
-                        <EventIcon type={event.type} />
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[11px] text-zinc-400">
-                          {event.text}
-                        </div>
-
-                        <div className="mt-1 font-mono text-[9px] text-zinc-700">
-                          {event.time}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-t border-zinc-800 p-3">
-                  <Button
-                    variant="ghost"
-                    className="h-7 w-full text-[10px] text-zinc-600 hover:bg-zinc-900 hover:text-zinc-400"
-                  >
-                    View complete activity
-                  </Button>
-                </div>
-              </Card>
-            </div>
-
-            {/* AGENTS */}
-            <div className="mt-5">
-              <div className="mb-3 text-xs font-semibold text-zinc-300">
-                Agent runtime
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  {
-                    name: "Watcher",
-                    role: "Detection & monitoring",
-                    icon: Activity,
-                    state: "ACTIVE",
-                    detail: "Polling fleet health",
-                  },
-                  {
-                    name: "Diagnoser",
-                    role: "Root cause analysis",
-                    icon: Bot,
-                    state: "IDLE",
-                    detail: "Awaiting incident",
-                  },
-                  {
-                    name: "Patcher",
-                    role: "Remediation planning",
-                    icon: Code2,
-                    state: approved ? "DEPLOYING" : "STANDBY",
-                    detail: approved
-                      ? "Applying patch #17"
-                      : "Awaiting approval",
-                  },
-                ].map((agent) => {
-                  const Icon = agent.icon;
-
-                  return (
-                    <Card
-                      key={agent.name}
-                      className="rounded-lg border-zinc-800 bg-[#0d0f12] p-4 shadow-none"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900">
-                            <Icon className="h-4 w-4 text-zinc-400" />
-                          </div>
-
-                          <div>
-                            <div className="text-xs font-medium">
-                              {agent.name}
-                            </div>
-
-                            <div className="mt-0.5 text-[9px] text-zinc-600">
-                              {agent.role}
-                            </div>
-                          </div>
-                        </div>
-
-                        <span className="flex items-center gap-1.5 font-mono text-[8px] text-zinc-600">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                          {agent.state}
-                        </span>
-                      </div>
-
-                      <Separator className="my-4 bg-zinc-800" />
-
-                      <div className="flex items-center gap-2 text-[10px] text-zinc-500">
-                        <Terminal className="h-3 w-3" />
-                        {agent.detail}
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
+            {activeNav === "Audit Log" && <AuditLogView data={data} />}
           </div>
         </section>
       </div>
 
       {/* CHAOS MODAL */}
       {chaosOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <Card className="w-[480px] border-zinc-700 bg-[#101216] p-5 shadow-2xl">
-            <div className="mb-5 flex items-start justify-between">
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => {
+            setChaosOpen(false);
+            setChaosError(null);
+          }}
+        >
+          <Card
+            className="w-[460px] max-w-[92vw] border-border/70 bg-[#0e1012] p-5 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between border-b border-border/50 pb-3">
               <div>
-                <div className="flex items-center gap-2">
-                  <Zap className="h-4 w-4 text-amber-400" />
-                  <h2 className="text-sm font-semibold">Chaos Lab</h2>
-                </div>
-
-                <p className="mt-1 text-xs text-zinc-500">
-                  Inject a controlled failure into the fleet.
+                <h2 className="text-sm font-semibold text-foreground">Fault Injection Trigger</h2>
+                <p className="text-xs text-muted-foreground mt-0.5 font-mono text-[11px]">
+                  Simulate live microservice failure or latency anomaly.
                 </p>
               </div>
-
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 text-zinc-500"
-                onClick={() => setChaosOpen(false)}
+                className="h-6 text-xs text-muted-foreground font-mono"
+                onClick={() => {
+                  setChaosOpen(false);
+                  setChaosError(null);
+                }}
               >
                 ESC
               </Button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 text-xs font-mono">
               <div>
-                <label className="mb-2 block text-[10px] uppercase tracking-widest text-zinc-600">
-                  Target service
+                <label className="mb-1.5 block text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Target Service
                 </label>
-
-                <div className="rounded-md border border-zinc-800 bg-zinc-900/50 px-3 py-2.5 font-mono text-xs">
-                  orders
-                  <ChevronDown className="float-right h-3.5 w-3.5 text-zinc-600" />
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-[10px] uppercase tracking-widest text-zinc-600">
-                  Failure mode
-                </label>
-
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    "Kill container",
-                    "Spike latency",
-                    "Corrupt config",
-                    "Memory pressure",
-                  ].map((failure) => (
+                <div className="grid grid-cols-3 gap-1.5">
+                  {services.map((svc) => (
                     <button
-                      key={failure}
-                      className="rounded-md border border-zinc-800 bg-zinc-900/30 px-3 py-3 text-left text-xs text-zinc-400 transition hover:border-zinc-600 hover:bg-zinc-900 hover:text-white"
+                      key={svc.service}
+                      onClick={() => setChaosTarget(svc.service)}
+                      className={`p-2 rounded-md border text-left transition-colors ${
+                        chaosTarget === svc.service
+                          ? "border-emerald-500/60 bg-emerald-500/10 text-foreground"
+                          : "border-border/60 bg-[#141619] text-muted-foreground hover:text-foreground"
+                      }`}
                     >
-                      {failure}
+                      <div className="font-semibold">{svc.service}</div>
+                      <div className="text-[9px] text-muted-foreground mt-0.5">{svc.status}</div>
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div className="rounded-md border border-amber-500/20 bg-amber-500/[0.03] p-3">
-                <div className="flex gap-2">
-                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 text-amber-400" />
-
-                  <div>
-                    <div className="text-[10px] font-medium text-amber-400">
-                      Controlled failure
-                    </div>
-
-                    <div className="mt-1 text-[9px] leading-4 text-zinc-600">
-                      This will intentionally degrade the selected service.
-                      Sentinel should detect and respond automatically.
-                    </div>
-                  </div>
+              <div>
+                <label className="mb-1.5 block text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Failure Mode
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { mode: "latency" as ChaosMode, label: "Latency Spike (+3000ms)", desc: "Simulates database queue bottleneck" },
+                    { mode: "kill" as ChaosMode, label: "Pod Failure (503)", desc: "Forces service unavailable status" },
+                  ].map((f) => (
+                    <button
+                      key={f.mode}
+                      onClick={() => setChaosMode(f.mode)}
+                      className={`p-2.5 rounded-md border text-left transition-colors ${
+                        chaosMode === f.mode
+                          ? "border-amber-500/60 bg-amber-500/10 text-foreground"
+                          : "border-border/60 bg-[#141619] text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <div className="font-semibold text-foreground text-xs">{f.label}</div>
+                      <div className="text-[10px] text-muted-foreground mt-1 leading-snug">{f.desc}</div>
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              {chaosError && (
+                <div className="rounded border border-red-500/30 bg-red-500/10 p-2 text-[11px] text-red-400">
+                  {chaosError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-border/50">
                 <Button
                   variant="outline"
-                  className="border-zinc-700 bg-transparent text-xs"
-                  onClick={() => setChaosOpen(false)}
+                  size="sm"
+                  className="h-8 border-border/70 bg-transparent text-xs"
+                  onClick={() => {
+                    setChaosOpen(false);
+                    setChaosError(null);
+                  }}
+                  disabled={chaosInjecting}
                 >
                   Cancel
                 </Button>
-
                 <Button
-                  className="bg-amber-500 text-xs text-black hover:bg-amber-400"
-                  onClick={() => {
-                    setChaosOpen(false);
-                  }}
+                  size="sm"
+                  className="h-8 bg-amber-500 text-black hover:bg-amber-400 font-semibold text-xs"
+                  onClick={handleInjectChaos}
+                  disabled={chaosInjecting || !chaosTarget}
                 >
-                  <Play className="mr-2 h-3.5 w-3.5" />
-                  Inject failure
+                  {chaosInjecting ? (
+                    <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                  ) : null}
+                  Inject Fault
                 </Button>
               </div>
             </div>
           </Card>
         </div>
       )}
+
+      {/* SEARCH DIALOG */}
+      <SearchDialog
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        onSelectNav={(name) => setActiveNav(name)}
+      />
+
+      {/* SETTINGS DIALOG */}
+      <SettingsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
+
+      {/* AGENT DRAWER PANEL */}
+      <AgentPanel
+        open={agentOpen}
+        onClose={() => setAgentOpen(false)}
+        agentUrl={AGENT_URL}
+      />
     </main>
   );
 }

@@ -4,6 +4,11 @@ import { getServiceHealth, restartService } from "./fleet-client.js";
 import { getRecentLogs } from "./log-buffer.js";
 import { getAllSnapshots, getLatestSnapshot } from "./poller.js";
 
+
+const SERVICE_NAME = z
+  .enum(["api-gateway", "orders", "auth"])
+  .describe("Exact service name - one of: api-gateway, orders, auth");
+
 export function createFleetControlServer(): McpServer {
   const server = new McpServer({
     name: "fleet-control",
@@ -28,7 +33,7 @@ export function createFleetControlServer(): McpServer {
       title: "Get service health",
       description: "Check the live health of one service by name (fresh HTTP call, not cached).",
       inputSchema: {
-        serviceName: z.string().describe("One of: api-gateway, orders, auth"),
+        serviceName: SERVICE_NAME,
       },
     },
     async ({ serviceName }) => {
@@ -43,7 +48,7 @@ export function createFleetControlServer(): McpServer {
       title: "Get service metrics",
       description: "Get latency/status metrics for one service from the last background poll.",
       inputSchema: {
-        serviceName: z.string().describe("One of: api-gateway, orders, auth"),
+        serviceName: SERVICE_NAME,
       },
     },
     async ({ serviceName }) => {
@@ -59,7 +64,9 @@ export function createFleetControlServer(): McpServer {
       description:
         "Get recent status-change log lines, optionally filtered to one service. Use this to correlate an incident with what changed.",
       inputSchema: {
-        serviceName: z.string().optional().describe("Leave empty for logs across all services"),
+        serviceName: SERVICE_NAME.optional().describe(
+          "Leave empty for logs across all services"
+        ),
         limit: z.number().int().min(1).max(200).optional(),
       },
     },
@@ -77,7 +84,7 @@ export function createFleetControlServer(): McpServer {
         "Restart a service to recover it from a bad state. This is a REAL, IRREVERSIBLE action against " +
         "the live fleet. The agent must get explicit human approval before calling this tool.",
       inputSchema: {
-        serviceName: z.string().describe("One of: api-gateway, orders, auth"),
+        serviceName: SERVICE_NAME,
       },
       annotations: {
         destructiveHint: true,

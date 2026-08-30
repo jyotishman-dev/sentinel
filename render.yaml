@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: sentinel-backend
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: API_GATEWAY_URL
+        value: http://localhost:4001
+      - key: ORDERS_URL
+        value: http://localhost:4002
+      - key: AUTH_URL
+        value: http://localhost:4003

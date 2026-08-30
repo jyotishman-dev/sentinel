@@ -1,0 +1,17 @@
+{
+  "name": "sentinel-fleet-backend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start:gateway": "node fleet/api-gateway/dist/index.js",
+    "start:orders": "node fleet/orders/dist/index.js",
+    "start:auth": "node fleet/auth/dist/index.js",
+    "start:deploy-history": "node agents/tools/deploy-history/dist/index.js",
+    "start:fleet-control": "node agents/tools/fleet-control/dist/index.js",
+    "build": "pnpm --filter \"./fleet/*\" --filter \"./agents/tools/*\" run build",
+    "start": "concurrently \"npm run start:gateway\" \"npm run start:orders\" \"npm run start:auth\" \"npm run start:deploy-history\" \"npm run start:fleet-control\""
+  },
+  "dependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

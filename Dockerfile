@@ -1,40 +1,25 @@
-FROM node:20-alpine AS builder
+FROM node:20-alpine
 
 WORKDIR /app
 
+# Enable pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Copy all package files
+# Copy workspace and root package files
 COPY pnpm-workspace.yaml package.json ./
-COPY fleet/api-gateway/package.json ./fleet/api-gateway/
-COPY fleet/orders/package.json ./fleet/orders/
-COPY fleet/auth/package.json ./fleet/auth/
-COPY agents/tools/fleet-control/package.json ./agents/tools/fleet-control/
-COPY agents/tools/deploy-history/package.json ./agents/tools/deploy-history/
 
-# Install dependencies
-RUN pnpm install
-
-# Copy source files
+# Copy all packages
 COPY fleet/ ./fleet/
 COPY agents/ ./agents/
+COPY chaos-engine/ ./chaos-engine/
 
-# Build TypeScript
-RUN cd fleet/api-gateway && pnpm build && \
-    cd ../orders && pnpm build && \
-    cd ../auth && pnpm build && \
-    cd ../../agents/tools/fleet-control && pnpm build && \
-    cd ../deploy-history && pnpm build
+# Install all dependencies across the monorepo workspace
+RUN pnpm install --no-frozen-lockfile
 
-FROM node:20-alpine AS runner
+# Install global runner tools
+RUN npm install -g concurrently tsx
 
-WORKDIR /app
-
-RUN corepack enable && corepack prepare pnpm@latest --activate
-RUN npm install -g concurrently
-
-COPY --from=builder /app /app
-
+ENV NODE_ENV=production
 ENV PORT=5000
 ENV API_GATEWAY_URL=http://localhost:4001
 ENV ORDERS_URL=http://localhost:4002
@@ -42,9 +27,9 @@ ENV AUTH_URL=http://localhost:4003
 
 EXPOSE 5000 4001 4002 4003 5001
 
-CMD ["concurrently", \
-     "node fleet/api-gateway/dist/index.js", \
-     "node fleet/orders/dist/index.js", \
-     "node fleet/auth/dist/index.js", \
-     "node agents/tools/deploy-history/dist/index.js", \
-     "node agents/tools/fleet-control/dist/index.js"]
+CMD ["concurrently", "--kill-others-on-fail", \
+     "tsx fleet/api-gateway/src/server.ts", \
+     "tsx fleet/orders/src/server.ts", \
+     "tsx fleet/auth/src/server.ts", \
+     "tsx agents/tools/deploy-history/src/index.ts", \
+     "tsx agents/tools/fleet-control/src/index.ts"]

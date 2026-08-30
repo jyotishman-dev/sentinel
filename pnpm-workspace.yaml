@@ -1,0 +1,5 @@
+packages:
+  - "fleet/*"
+  - "agents/tools/*"
+  - "chaos-engine"
+  - "frontend"

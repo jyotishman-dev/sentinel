@@ -49,6 +49,7 @@ import {
   fetchFleetStatus,
   triggerChaos,
   resetChaos,
+  dispatchIncidentToTrueForgeAgent,
   type FleetStatus,
   type ChaosMode,
 } from "@/lib/api";

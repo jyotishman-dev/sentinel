@@ -1,15 +1,15 @@
-"use client"
+"use client";
 
-import type * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
+import * as React from "react";
+import { cva, type VariantProps } from "class-variance-authority";
 import {
   Button as ButtonPrimitive,
   Link as LinkPrimitive,
   type ButtonProps as ButtonPrimitiveProps,
   type LinkProps as LinkPrimitiveProps,
-} from "react-aria-components"
+} from "react-aria-components";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
   "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
@@ -46,27 +46,35 @@ const buttonVariants = cva(
       size: "default",
     },
   }
-)
+);
+
+export interface ButtonProps
+  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "className">,
+    VariantProps<typeof buttonVariants> {
+  className?: string;
+  isDisabled?: boolean;
+  onPress?: ButtonPrimitiveProps["onPress"];
+}
 
 function Button({
   className,
   variant = "default",
   size = "default",
+  disabled,
+  isDisabled,
   ...props
-}: Omit<ButtonPrimitiveProps, "className"> &
-  React.RefAttributes<HTMLButtonElement> &
-  VariantProps<typeof buttonVariants> & {
-    className?: string
-  }) {
+}: ButtonProps) {
+  const isActuallyDisabled = disabled ?? isDisabled;
   return (
     <ButtonPrimitive
       data-slot="button"
       data-variant={variant}
       data-size={size}
+      isDisabled={isActuallyDisabled}
       className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
+      {...(props as any)}
     />
-  )
+  );
 }
 
 function LinkButton({
@@ -76,7 +84,7 @@ function LinkButton({
   ...props
 }: Omit<LinkPrimitiveProps, "className"> &
   VariantProps<typeof buttonVariants> & {
-    className?: string
+    className?: string;
   }) {
   return (
     <LinkPrimitive
@@ -86,7 +94,7 @@ function LinkButton({
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />
-  )
+  );
 }
 
-export { Button, LinkButton, buttonVariants }
+export { Button, LinkButton, buttonVariants };

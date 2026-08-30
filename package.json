@@ -11,6 +11,11 @@
     "build": "pnpm --filter \"./fleet/*\" --filter \"./agents/tools/*\" run build",
     "start": "concurrently \"npm run start:gateway\" \"npm run start:orders\" \"npm run start:auth\" \"npm run start:deploy-history\" \"npm run start:fleet-control\""
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
   "dependencies": {
     "concurrently": "^9.1.2"
   }

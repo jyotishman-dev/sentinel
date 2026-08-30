@@ -3,3 +3,6 @@ packages:
   - "agents/tools/*"
   - "chaos-engine"
   - "frontend"
+
+onlyBuiltDependencies:
+  - esbuild

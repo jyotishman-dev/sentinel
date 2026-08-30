@@ -6,15 +6,15 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # Copy workspace and root package files
-COPY pnpm-workspace.yaml package.json ./
+COPY pnpm-workspace.yaml package.json .npmrc ./
 
 # Copy all packages
 COPY fleet/ ./fleet/
 COPY agents/ ./agents/
 COPY chaos-engine/ ./chaos-engine/
 
-# Install all dependencies across the monorepo workspace
-RUN pnpm install --no-frozen-lockfile
+# Install all dependencies across the monorepo workspace (ignoring build scripts if not needed)
+RUN pnpm install --no-frozen-lockfile --ignore-scripts
 
 # Install global runner tools
 RUN npm install -g concurrently tsx
